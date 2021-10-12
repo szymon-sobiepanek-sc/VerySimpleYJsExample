@@ -1,0 +1,16 @@
+{
+  "name": "root",
+  "private": true,
+  "devDependencies": {
+    "lerna": "^4.0.0"
+  },
+  "scripts": {
+    "build": "yarn build:crdt",
+    "build:crdt": "yarn workspace crdt build",
+    "test": "lerna run test",
+    "run:signaling": "PORT=4444 y-webrtc-signaling"
+  },
+  "workspaces": [
+    "packages/*"
+  ]
+}

@@ -8,7 +8,8 @@
     "build": "yarn build:crdt",
     "build:crdt": "yarn workspace crdt build",
     "test": "lerna run test",
-    "run:signaling": "PORT=4444 y-webrtc-signaling"
+    "run:webrtc": "PORT=4444 y-webrtc-signaling",
+    "run:ws": "PORT=4444 y-websocket-server"
   },
   "workspaces": [
     "packages/*"

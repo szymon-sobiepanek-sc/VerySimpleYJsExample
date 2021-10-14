@@ -13612,13 +13612,15 @@ var crdt = (function (exports) {
     var updateNode = function updateNode(key, update) {
       var current = nodes.get(key);
       nodes.set(key, _objectSpread2(_objectSpread2({}, current), update));
-    };
+    }; // ydoc.on('afterTransaction', (transaction, nodesAfterTransaction ) => {
+    //   console.log(transaction);
+    // });
 
-    ydoc.on('afterTransaction', function (transaction, nodesAfterTransaction) {
-      console.log(transaction);
-    });
+
     var goJSDiagram = $(go.exports.Diagram, "goJSDiagramDiv");
     nodes.observe(function (event) {
+      console.log('nodes changed');
+      console.log(event.changes.keys);
       goJSDiagram.model.commit(function (model) {
         var nodesArray = Object.values(nodes.toJSON());
         model.mergeNodeDataArray(nodesArray);

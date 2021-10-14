@@ -29,14 +29,17 @@ export const bundle = () => {
         ...update,
       });
   };
-  ydoc.on('afterTransaction', (transaction, nodesAfterTransaction ) => {
-    console.log(transaction);
-  });
+
+  // ydoc.on('afterTransaction', (transaction, nodesAfterTransaction ) => {
+  //   console.log(transaction);
+  // });
 
   const goJSDiagram =
     $(go.Diagram, "goJSDiagramDiv");
 
   nodes.observe((event) => {
+    console.log('nodes changed');
+    console.log(event.changes.keys)
     goJSDiagram.model.commit((model) => {
       const nodesArray = Object.values(nodes.toJSON());
       model.mergeNodeDataArray(nodesArray);

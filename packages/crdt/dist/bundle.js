@@ -13598,8 +13598,104 @@ var crdt = (function (exports) {
 
   }
 
+  var $ = go.exports.GraphObject.make;
+  var TEXT_BLOCK_NAME = 'TEXT_BLOCK';
+  var TEXT_PADDING = 8;
+  var usernamePanel = function usernamePanel(properties) {
+    for (var _len = arguments.length, children = new Array(_len > 1 ? _len - 1 : 0), _key = 1; _key < _len; _key++) {
+      children[_key - 1] = arguments[_key];
+    }
+
+    return $.apply(void 0, [go.exports.Panel, go.exports.Panel.Spot, _objectSpread2({
+      alignment: new go.exports.Spot(0, 0, 20, 20),
+      alignmentFocus: new go.exports.Spot(0, 0)
+    }, properties)].concat(children));
+  };
+  var usernameBackground = function usernameBackground() {
+    for (var _len2 = arguments.length, bindings = new Array(_len2), _key2 = 0; _key2 < _len2; _key2++) {
+      bindings[_key2] = arguments[_key2];
+    }
+
+    return $.apply(void 0, [go.exports.Shape, 'RoundedRectangle', {
+      alignment: go.exports.Spot.LeftCenter,
+      alignmentFocus: go.exports.Spot.LeftCenter,
+      strokeWidth: 0
+    }, new go.exports.Binding('desiredSize', '', function (textBlock) {
+      textBlock.part.ensureBounds();
+      var width = textBlock.actualBounds.width;
+      return new go.exports.Size(width + 2 * TEXT_PADDING, 25);
+    }).ofObject(TEXT_BLOCK_NAME)].concat(bindings));
+  };
+  var usernameText = function usernameText() {
+    for (var _len3 = arguments.length, bindings = new Array(_len3), _key3 = 0; _key3 < _len3; _key3++) {
+      bindings[_key3] = arguments[_key3];
+    }
+
+    return $.apply(void 0, [go.exports.TextBlock, {
+      name: TEXT_BLOCK_NAME,
+      font: "14px Arial",
+      stroke: "white",
+      alignment: new go.exports.Spot(0, 0.5, TEXT_PADDING, 0),
+      alignmentFocus: go.exports.Spot.LeftCenter
+    }].concat(bindings));
+  }; // eslint-disable-next-line max-len
+
+  var geometryString = 'M 0.192806,0 4.6417128,12 6.888184,6.691651 11.807194,4.5366539 Z';
+  var updatePosition = function updatePosition(cursor, newLocation) {
+    cursor.diagram.model.setDataProperty(cursor.data, 'loc', newLocation);
+  };
+
+  var arrow = function arrow() {
+    return $(go.exports.Shape, {
+      geometryString: go.exports.Geometry.fillPath(geometryString),
+      desiredSize: new go.exports.Size(25, 25),
+      alignment: go.exports.Spot.TopLeft,
+      alignmentFocus: go.exports.Spot.TopLeft,
+      stroke: 'transparent'
+    }, new go.exports.Binding('fill', 'color'));
+  };
+
+  var cursor = function cursor() {
+    for (var _len4 = arguments.length, children = new Array(_len4), _key4 = 0; _key4 < _len4; _key4++) {
+      children[_key4] = arguments[_key4];
+    }
+
+    return $.apply(void 0, [go.exports.Node, go.exports.Panel.Spot, new go.exports.Binding("location", 'loc', go.exports.Point.parse).makeTwoWay(go.exports.Point.stringify), {
+      pickable: false,
+      selectable: false
+    }].concat(children));
+  };
+
+  var createCursorTemplate = function createCursorTemplate() {
+    return {
+      category: "cursor",
+      template: cursor(arrow(), usernamePanel({
+        alignment: new go.exports.Spot(0, 0, 20, 20),
+        alignmentFocus: new go.exports.Spot(0, 0)
+      }, usernameBackground(new go.exports.Binding('fill', 'color')), usernameText(new go.exports.Binding('text', 'username'))))
+    };
+  }; // import { createNodeTemplate } from "./nodeTemplate.js";
+
+  var createNodeTemplate = function createNodeTemplate() {
+    return {
+      category: 'node',
+      template: $(go.exports.Node, go.exports.Panel.Auto, new go.exports.Binding("location", 'loc', go.exports.Point.parse).makeTwoWay(go.exports.Point.stringify), $(go.exports.Shape, "RoundedRectangle", {
+        strokeWidth: 0,
+        fill: "white"
+      }, new go.exports.Binding("fill", "color")), $(go.exports.TextBlock, {
+        margin: 8,
+        font: "bold 14px sans-serif",
+        stroke: '#333'
+      }, new go.exports.Binding("text", "key")))
+    };
+  };
+  var divRect = {
+    x: 10,
+    y: 10
+  };
+  var userColors = ["lightblue", "orange", "lightgreen", "pink", "green"];
   var bundle = function bundle() {
-    var $ = go.exports.GraphObject.make;
+    var goJSDiagram = $(go.exports.Diagram, "goJSDiagramDiv");
     var myId = Math.floor(Math.random() * 1000);
     console.log("Starting CRDT id: ".concat(myId));
     var ydoc = new Doc();
@@ -13607,6 +13703,73 @@ var crdt = (function (exports) {
     provider.on("status", function (event) {
       console.log("Status: " + event.status); // logs "connected" or "disconnected"
     });
+    var templates = new go.exports.Map(); // In TypeScript you could write: new go.Map<string, go.Node>();
+
+    var coursorTemplate = createCursorTemplate();
+    var nodeTemplate = createNodeTemplate();
+    templates.add(coursorTemplate.category, coursorTemplate.template);
+    templates.add(nodeTemplate.category, nodeTemplate.template);
+    goJSDiagram.nodeTemplateMap = templates;
+
+    var getUserLoc = function getUserLoc(user) {
+      return go.exports.Point.stringify(new go.exports.Point(user.position.x, user.position.y));
+    };
+
+    var getUserCoursorKey = function getUserCoursorKey(user) {
+      return "user".concat(user.id);
+    };
+
+    var updateCoursorNode = function updateCoursorNode(user) {
+      var model = goJSDiagram.model;
+      var cursorData = model.findNodeDataForKey(getUserCoursorKey(user));
+      model.startTransaction("modified property");
+      model.set(cursorData, "loc", getUserLoc(user));
+      goJSDiagram.updateAllTargetBindings();
+      console.log(cursorData.loc, user.position.x, user.position.y);
+      model.commitTransaction("modified property");
+    };
+
+    var addCoursorNode = function addCoursorNode(user) {
+      var model = goJSDiagram.model;
+
+      if (user.position) {
+        model.startTransaction("modified property");
+        model.addNodeData({
+          key: getUserCoursorKey(user),
+          loc: getUserLoc(user),
+          color: userColors[Math.ceil(Math.random() * 100) % userColors.length],
+          category: coursorTemplate.category,
+          username: user.id
+        });
+        model.commitTransaction("modified property");
+      }
+    };
+
+    var upsertPosition = function upsertPosition(user) {
+      var cursorNode = goJSDiagram.findNodeForKey(getUserCoursorKey(user));
+
+      if (cursorNode) {
+        updateCoursorNode(user);
+      } else {
+        addCoursorNode(user);
+      }
+    };
+
+    var awareness = provider.awareness; // You can observe when a user updates their awareness information
+
+    awareness.on('change', function (changes) {
+      // Whenever somebody updates their awareness information,
+      // we log all awareness information from all users.
+      console.log(Array.from(awareness.getStates().values()));
+      Array.from(awareness.getStates().values()).forEach(function (user) {
+        if (user.id !== myId) {
+          upsertPosition(user);
+        }
+      });
+    }); // You can think of your own awareness information as a key-value store.
+    // We update our "user" field to propagate relevant user information.
+
+    awareness.setLocalStateField('id', myId);
     var nodes = ydoc.getMap("nodes"); // const links = ydoc.getArray("links");
 
     var updateNode = function updateNode(key, update) {
@@ -13617,10 +13780,9 @@ var crdt = (function (exports) {
     // });
 
 
-    var goJSDiagram = $(go.exports.Diagram, "goJSDiagramDiv");
     nodes.observe(function (event) {
       console.log('nodes changed');
-      console.log(event.changes.keys);
+      console.log(event.changes);
       goJSDiagram.model.commit(function (model) {
         var nodesArray = Object.values(nodes.toJSON());
         model.mergeNodeDataArray(nodesArray);
@@ -13631,14 +13793,6 @@ var crdt = (function (exports) {
     //   }, "synchronizeLinkData");
     // });
 
-    goJSDiagram.nodeTemplate = $(go.exports.Node, "Auto", new go.exports.Binding("location", 'loc', go.exports.Point.parse).makeTwoWay(go.exports.Point.stringify), $(go.exports.Shape, "RoundedRectangle", {
-      strokeWidth: 0,
-      fill: "white"
-    }, new go.exports.Binding("fill", "color")), $(go.exports.TextBlock, {
-      margin: 8,
-      font: "bold 14px sans-serif",
-      stroke: '#333'
-    }, new go.exports.Binding("text", "key")));
     goJSDiagram.addDiagramListener("SelectionMoved", function (e) {
       var selectedNode = e.diagram.selection.first();
       var key = selectedNode.key;
@@ -13648,6 +13802,17 @@ var crdt = (function (exports) {
         loc: go.exports.Point.stringify(new go.exports.Point(x, y))
       });
     });
+
+    var handler = function handler(event) {
+      var position = {
+        x: event.x - divRect.x - goJSDiagram.viewportBounds.x,
+        y: event.y - divRect.y - goJSDiagram.viewportBounds.y,
+        id: myId
+      };
+      awareness.setLocalStateField('position', position);
+    };
+
+    goJSDiagram === null || goJSDiagram === void 0 ? void 0 : goJSDiagram.div.addEventListener('mousemove', handler);
     return {
       initDiagram: function initDiagram() {
         var key = 'A';
@@ -13662,6 +13827,7 @@ var crdt = (function (exports) {
         nodes.set(key, {
           key: key,
           color: "lightblue",
+          category: nodeTemplate.category,
           loc: go.exports.Point.stringify(new go.exports.Point(Math.random() * 100, Math.random() * 100))
         });
       },
@@ -13677,20 +13843,17 @@ var crdt = (function (exports) {
         nodes.forEach(function (value, key) {
           nodes.delete(key);
         });
-      } // add: () => {
-      //   arr.push([myId]);
-      // },
-      // pop: () => {
-      //   arr.delete(0);
-      // },
-      // display: () => {
-      //   console.log(arr.toJSON());
-      // },
-
+      }
     };
   };
 
   exports.bundle = bundle;
+  exports.createCursorTemplate = createCursorTemplate;
+  exports.createNodeTemplate = createNodeTemplate;
+  exports.updatePosition = updatePosition;
+  exports.usernameBackground = usernameBackground;
+  exports.usernamePanel = usernamePanel;
+  exports.usernameText = usernameText;
 
   Object.defineProperty(exports, '__esModule', { value: true });
 

@@ -1,5 +1,6 @@
 import * as go from "gojs";
 import * as Y from "yjs";
+import throttle from 'lodash/throttle';
 import { WebsocketProvider } from "y-websocket";
 // import { createCursorTemplate } from "./coursorTemplate.js";
 
@@ -108,11 +109,13 @@ export const createNodeTemplate = () => ({
       $(go.Shape, "RoundedRectangle", { strokeWidth: 0, fill: "white" },
       new go.Binding("fill", "color")),
       $(go.TextBlock,
-      { margin: 8, font: "bold 14px sans-serif", stroke: '#333' }, 
-      new go.Binding("text", "key"))
+      { margin: 8, font: "bold 14px sans-serif", stroke: '#333', editable: true }, 
+      new go.Binding("text", "text").makeTwoWay()
+      )
   ),
 });
 
+const MOUSE_THROTTLE = 10;
 
 const divRect = {
   x: 10,
@@ -140,6 +143,7 @@ export const bundle = () => {
     "something-here",
     ydoc
   );
+
   provider.on("status", (event) => {
     console.log("Status: " + event.status); // logs "connected" or "disconnected"
   });
@@ -156,7 +160,6 @@ export const bundle = () => {
 
   const getUserLoc = (user) => 
    go.Point.stringify(new go.Point(user.position.x, user.position.y));
-
   
   const getUserCoursorKey= (user) => `user${user.id}`;
 
@@ -166,7 +169,6 @@ export const bundle = () => {
     model.startTransaction("modified property");
     model.set(cursorData, "loc", getUserLoc(user));
     goJSDiagram.updateAllTargetBindings();
-    console.log(cursorData.loc ,user.position.x, user.position.y);
     model.commitTransaction("modified property");
   };
 
@@ -196,11 +198,9 @@ export const bundle = () => {
   
   const awareness = provider.awareness
 
-  // You can observe when a user updates their awareness information
+  awareness.setLocalStateField('id', myId);
+  
   awareness.on('change', changes => {
-    // Whenever somebody updates their awareness information,
-    // we log all awareness information from all users.
-    console.log(Array.from(awareness.getStates().values()))
     Array.from(awareness.getStates().values()).forEach(user => {
       if (user.id !== myId) {
         upsertPosition(user);
@@ -208,12 +208,17 @@ export const bundle = () => {
     });
   })
 
-    // You can think of your own awareness information as a key-value store.
-    // We update our "user" field to propagate relevant user information.
-  awareness.setLocalStateField('id', myId);
+  const handler = throttle((event) => {
+    const position = {
+      x: event.x - divRect.x + goJSDiagram.viewportBounds.x,
+      y: event.y - divRect.y + goJSDiagram.viewportBounds.y,
+    }
+    awareness.setLocalStateField('position', position);
+  }, MOUSE_THROTTLE)
+  goJSDiagram.div.addEventListener('mousemove', handler);
+
 
   const nodes = ydoc.getMap("nodes");
-  // const links = ydoc.getArray("links");
   
   const updateNode = (key, update) => {
     const current = nodes.get(key);
@@ -228,8 +233,6 @@ export const bundle = () => {
   // });
 
   nodes.observe((event) => {
-    console.log('nodes changed');
-    console.log(event.changes)
     goJSDiagram.model.commit((model) => {
       const nodesArray = Object.values(nodes.toJSON());
       model.mergeNodeDataArray(nodesArray);
@@ -253,21 +256,20 @@ export const bundle = () => {
       });
     });
 
-  const handler = (event) => {
-    const position = {
-      x: event.x - divRect.x - goJSDiagram.viewportBounds.x,
-      y: event.y - divRect.y - goJSDiagram.viewportBounds.y,
-      id: myId,
-    }
-    awareness.setLocalStateField('position', position);
-  }
-  goJSDiagram?.div.addEventListener('mousemove', handler);
+    goJSDiagram.addDiagramListener("TextEdited", e => {
+      const text = e.subject.text;
+      const key = e.subject.part.key;
+      updateNode(key, {
+        text,
+      });
+    });
 
   return {
     initDiagram: () => {
       const key = 'A';
       nodes.set(key, 
         { 
+          text: "new node",
           key, 
           color: "lightgreen", 
           loc: go.Point.stringify(new go.Point(Math.random() * 100, Math.random() * 100)) },
@@ -277,6 +279,7 @@ export const bundle = () => {
       const key = `${Math.ceil(Math.random()*100)}`;
       nodes.set(key, 
         { 
+          text: "new node",
           key, 
           color: "lightblue", 
           category: nodeTemplate.category,
@@ -287,9 +290,6 @@ export const bundle = () => {
       updateNode(key, {
         color: "orange",
       }) 
-    },
-    removeNode:() => {
-      nodes.delete(0);
     },
     clean: () => {
       nodes.forEach((value, key) => {
